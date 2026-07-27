@@ -57,9 +57,10 @@
   .card .sub{font-size:12.5px;color:#6b7284;margin:0 0 16px; line-height:1.5;}
 
   .drop{
-    border:1.5px dashed #c4cad8; border-radius:8px; padding:18px;
+    border:1.5px dashed #c4cad8; border-radius:8px; padding:22px 18px;
     text-align:center; font-size:13px; color:#6b7284; cursor:pointer;
     transition:border-color .15s, background .15s;
+    user-select:none;
   }
   .drop:hover, .drop.drag{border-color:var(--accent); background:var(--accent-dim);}
   .drop input{display:none;}
@@ -145,10 +146,10 @@
     <div class="card">
       <h2><span class="step-num">1</span> Base de referência (BSAO / House ID → MAS)</h2>
       <p class="sub">Arquivo com os campos de BSAO / House ID e MAS pareados.</p>
-      <label class="drop" id="dropRef">
+      <div class="drop" id="dropRef">
+        <span>Clique ou arraste o(s) arquivo(s) aqui</span>
         <input type="file" id="fileRef" multiple accept=".xlsx,.xls,.csv">
-        Clique ou arraste o(s) arquivo(s) aqui
-      </label>
+      </div>
       <div class="filelist" id="listRef"></div>
 
       <div class="map-row hidden" id="mapRefWrap">
@@ -171,10 +172,10 @@
     <div class="card">
       <h2><span class="step-num">2</span> Base a completar/conferir (AGING)</h2>
       <p class="sub">Arquivo(s) onde o MAS precisa ser preenchido/conferido a partir do BSAO ou House ID.</p>
-      <label class="drop" id="dropTgt">
+      <div class="drop" id="dropTgt">
+        <span>Clique ou arraste o(s) arquivo(s) aqui</span>
         <input type="file" id="fileTgt" multiple accept=".xlsx,.xls,.csv">
-        Clique ou arraste o(s) arquivo(s) aqui
-      </label>
+      </div>
       <div class="filelist" id="listTgt"></div>
 
       <div class="map-row hidden" id="mapTgtWrap">
@@ -221,7 +222,7 @@
 <script>
 const state = { refFiles: [], tgtFiles: [] };
 
-// Função para extrair BSAO ou House ID (removendo o S da frente caso seja um Shipment ID)
+// Extrai BSAO ou House ID (remove o 'S' inicial se for Shipment ID)
 function extractBSAO(val){
   if(val===null||val===undefined) return null;
   const s = String(val).trim();
@@ -321,6 +322,7 @@ const selTgtMas = document.getElementById('selTgtMas');
 const btnProcess = document.getElementById('btnProcess');
 
 async function handleFiles(files, group){
+  if(!files || !files.length) return;
   for(const file of files){
     try{
       const meta = await readWorkbookMeta(file);
@@ -374,18 +376,38 @@ function refreshTgtMap(){
   fillSelect(selTgtMas, headers, guessHeader(headers, ['ref cliente','ref. minebea','minebea','mas']));
 }
 
-// Eventos de Clique e Arrastar (Drag & Drop)
-dropRef.addEventListener('click', ()=>fileRefInput.click());
-fileRefInput.addEventListener('change', e=>handleFiles([...e.target.files],'ref'));
-dropRef.addEventListener('dragover', e=>{e.preventDefault(); dropRef.classList.add('drag');});
-dropRef.addEventListener('dragleave', ()=>dropRef.classList.remove('drag'));
-dropRef.addEventListener('drop', e=>{ e.preventDefault(); dropRef.classList.remove('drag'); handleFiles([...e.dataTransfer.files],'ref'); });
+// Configuração robusta de Upload e Drag & Drop
+function setupDropZone(dropEl, inputEl, group){
+  dropEl.addEventListener('click', (e)=>{
+    if(e.target !== inputEl) inputEl.click();
+  });
+  
+  inputEl.addEventListener('change', e=>{
+    handleFiles([...e.target.files], group);
+    inputEl.value = ''; // Limpa o input para permitir selecionar o mesmo arquivo novamente se necessário
+  });
 
-dropTgt.addEventListener('click', ()=>fileTgtInput.click());
-fileTgtInput.addEventListener('change', e=>handleFiles([...e.target.files],'tgt'));
-dropTgt.addEventListener('dragover', e=>{e.preventDefault(); dropTgt.classList.add('drag');});
-dropTgt.addEventListener('dragleave', ()=>dropTgt.classList.remove('drag'));
-dropTgt.addEventListener('drop', e=>{ e.preventDefault(); dropTgt.classList.remove('drag'); handleFiles([...e.dataTransfer.files],'tgt'); });
+  dropEl.addEventListener('dragover', e=>{
+    e.preventDefault();
+    dropEl.classList.add('drag');
+  });
+
+  dropEl.addEventListener('dragleave', e=>{
+    e.preventDefault();
+    dropEl.classList.remove('drag');
+  });
+
+  dropEl.addEventListener('drop', e=>{
+    e.preventDefault();
+    dropEl.classList.remove('drag');
+    if(e.dataTransfer && e.dataTransfer.files.length){
+      handleFiles([...e.dataTransfer.files], group);
+    }
+  });
+}
+
+setupDropZone(dropRef, fileRefInput, 'ref');
+setupDropZone(dropTgt, fileTgtInput, 'tgt');
 
 function checkReady(){ btnProcess.disabled = !(state.refFiles.length && state.tgtFiles.length); }
 
