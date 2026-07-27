@@ -378,13 +378,13 @@ function refreshTgtMap(){
 dropRef.addEventListener('click', ()=>fileRefInput.click());
 fileRefInput.addEventListener('change', e=>handleFiles([...e.target.files],'ref'));
 dropRef.addEventListener('dragover', e=>{e.preventDefault(); dropRef.classList.add('drag');});
-dropRef.addEventListener('dragleave', ()=>dropRef.classList.remove('drag'););
+dropRef.addEventListener('dragleave', ()=>dropRef.classList.remove('drag'));
 dropRef.addEventListener('drop', e=>{ e.preventDefault(); dropRef.classList.remove('drag'); handleFiles([...e.dataTransfer.files],'ref'); });
 
 dropTgt.addEventListener('click', ()=>fileTgtInput.click());
 fileTgtInput.addEventListener('change', e=>handleFiles([...e.target.files],'tgt'));
 dropTgt.addEventListener('dragover', e=>{e.preventDefault(); dropTgt.classList.add('drag');});
-dropTgt.addEventListener('dragleave', ()=>dropTgt.classList.remove('drag'););
+dropTgt.addEventListener('dragleave', ()=>dropTgt.classList.remove('drag'));
 dropTgt.addEventListener('drop', e=>{ e.preventDefault(); dropTgt.classList.remove('drag'); handleFiles([...e.dataTransfer.files],'tgt'); });
 
 function checkReady(){ btnProcess.disabled = !(state.refFiles.length && state.tgtFiles.length); }
