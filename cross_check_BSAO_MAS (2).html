@@ -137,7 +137,7 @@
   <header>
     <div class="eyebrow">Ferramenta de conferência · Preserva Formatação Original</div>
     <h1>Cross-check BSAO / House ID × Referência MAS</h1>
-    <p>Preenche as colunas diretamente no arquivo sem alterar fontes, formatos numéricos, de data ou largura de colunas. Suporta BSAO e House/Shipment ID (com S na frente).</p>
+    <p>Preenche as colunas diretamente no arquivo sem alterar fontes, formatos numéricos, de data ou largura de colunas. Normaliza o House ID removendo o 'S' inicial se presente.</p>
   </header>
 
   <div class="grid">
@@ -221,7 +221,7 @@
 <script>
 const state = { refFiles: [], tgtFiles: [] };
 
-// Função para extrair BSAO ou House / Shipment ID (começando com S)
+// Função para extrair BSAO ou House ID (removendo o S da frente caso seja um Shipment ID)
 function extractBSAO(val){
   if(val===null||val===undefined) return null;
   const s = String(val).trim();
@@ -230,9 +230,13 @@ function extractBSAO(val){
   const mBsao = s.match(/BSAO\s*0*\d+/i);
   if(mBsao) return mBsao[0].replace(/\s+/g,'').toUpperCase();
   
-  // 2. Padrão House / Shipment ID (iniciando com S seguido de letras/números, ex: SHKG1360386, SIAH0360253, SHA90169861)
-  const mShip = s.match(/\bS[A-Z0-9]{9,12}\b/i);
-  if(mShip) return mShip[0].replace(/\s+/g,'').toUpperCase();
+  // 2. Se for Shipment ID com 'S' na frente (ex: SIAH0360253, SHKG1360386), extrai o House ID sem o 'S' (IAH0360253, HKG1360386)
+  const mShip = s.match(/\bS([A-Z]{3,4}\d{6,8})\b/i);
+  if(mShip) return mShip[1].toUpperCase();
+
+  // 3. Se já for o House ID puro sem 'S' (ex: IAH0360253, HKG1360386)
+  const mHouse = s.match(/\b[A-Z]{3,4}\d{6,8}\b/i);
+  if(mHouse) return mHouse[0].toUpperCase();
   
   return null;
 }
@@ -397,7 +401,7 @@ btnProcess.addEventListener('click', ()=>{
   const tgtBsaoAlt = selTgtBsaoAlt.value;
   const tgtMasCol = selTgtMas.value;
 
-  // 1. Mapeamento (BSAO ou House/Shipment ID -> MAS)
+  // 1. Mapeamento (BSAO ou House ID -> MAS)
   const bsaoMap = {};
   state.refFiles.forEach(f=>{
     const ws = f.wb.Sheets[f.sheetName];
