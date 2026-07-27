@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Cross-check BSAO x MAS</title>
+<title>Cross-check BSAO / House ID x MAS</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
@@ -136,15 +136,15 @@
 <div class="wrap">
   <header>
     <div class="eyebrow">Ferramenta de conferência · Preserva Formatação Original</div>
-    <h1>Cross-check Referência BSAO × Referência MAS</h1>
-    <p>Preenche as colunas diretamente no arquivo sem alterar fontes, formatos numéricos, de data ou largura de colunas.</p>
+    <h1>Cross-check BSAO / House ID × Referência MAS</h1>
+    <p>Preenche as colunas diretamente no arquivo sem alterar fontes, formatos numéricos, de data ou largura de colunas. Suporta BSAO e House/Shipment ID (com S na frente).</p>
   </header>
 
   <div class="grid">
     <!-- STEP 1 -->
     <div class="card">
-      <h2><span class="step-num">1</span> Base de referência (BSAO → MAS)</h2>
-      <p class="sub">Arquivo com os campos de BSAO e MAS pareados.</p>
+      <h2><span class="step-num">1</span> Base de referência (BSAO / House ID → MAS)</h2>
+      <p class="sub">Arquivo com os campos de BSAO / House ID e MAS pareados.</p>
       <label class="drop" id="dropRef">
         <input type="file" id="fileRef" multiple accept=".xlsx,.xls,.csv">
         Clique ou arraste o(s) arquivo(s) aqui
@@ -153,11 +153,11 @@
 
       <div class="map-row hidden" id="mapRefWrap">
         <div class="field">
-          <label>Coluna BSAO — principal</label>
+          <label>Coluna BSAO / House ID — principal</label>
           <select id="selRefBsaoPrimary"></select>
         </div>
         <div class="field">
-          <label>Coluna BSAO — alternativa</label>
+          <label>Coluna BSAO / House ID — alternativa</label>
           <select id="selRefBsaoAlt"></select>
         </div>
         <div class="field" style="grid-column:1 / -1">
@@ -170,7 +170,7 @@
     <!-- STEP 2 -->
     <div class="card">
       <h2><span class="step-num">2</span> Base a completar/conferir (AGING)</h2>
-      <p class="sub">Arquivo(s) onde o MAS precisa ser preenchido/conferido.</p>
+      <p class="sub">Arquivo(s) onde o MAS precisa ser preenchido/conferido a partir do BSAO ou House ID.</p>
       <label class="drop" id="dropTgt">
         <input type="file" id="fileTgt" multiple accept=".xlsx,.xls,.csv">
         Clique ou arraste o(s) arquivo(s) aqui
@@ -179,11 +179,11 @@
 
       <div class="map-row hidden" id="mapTgtWrap">
         <div class="field">
-          <label>Coluna BSAO — principal</label>
+          <label>Coluna BSAO / House ID — principal</label>
           <select id="selTgtBsaoPrimary"></select>
         </div>
         <div class="field">
-          <label>Coluna BSAO — alternativa</label>
+          <label>Coluna BSAO / House ID — alternativa</label>
           <select id="selTgtBsaoAlt"></select>
         </div>
         <div class="field" style="grid-column:1 / -1">
@@ -203,8 +203,8 @@
     <div class="legend">
       <span><span class="dot" style="background:var(--ok)"></span> OK — MAS encontrado</span>
       <span><span class="dot" style="background:var(--div)"></span> Divergente</span>
-      <span><span class="dot" style="background:var(--warn)"></span> BSAO sem correspondência</span>
-      <span><span class="dot" style="background:var(--bad)"></span> BSAO não localizado</span>
+      <span><span class="dot" style="background:var(--warn)"></span> BSAO / House ID sem correspondência</span>
+      <span><span class="dot" style="background:var(--bad)"></span> BSAO / House ID não localizado</span>
     </div>
 
     <div class="result-actions">
@@ -221,12 +221,20 @@
 <script>
 const state = { refFiles: [], tgtFiles: [] };
 
+// Função para extrair BSAO ou House / Shipment ID (começando com S)
 function extractBSAO(val){
   if(val===null||val===undefined) return null;
-  const s = String(val);
-  const m = s.match(/BSAO\s*0*\d+/i);
-  if(!m) return null;
-  return m[0].replace(/\s+/g,'').toUpperCase();
+  const s = String(val).trim();
+  
+  // 1. Padrão BSAO (ex: BSAO0283110)
+  const mBsao = s.match(/BSAO\s*0*\d+/i);
+  if(mBsao) return mBsao[0].replace(/\s+/g,'').toUpperCase();
+  
+  // 2. Padrão House / Shipment ID (iniciando com S seguido de letras/números, ex: SHKG1360386, SIAH0360253, SHA90169861)
+  const mShip = s.match(/\bS[A-Z0-9]{9,12}\b/i);
+  if(mShip) return mShip[0].replace(/\s+/g,'').toUpperCase();
+  
+  return null;
 }
 
 function readWorkbookMeta(file){
@@ -348,8 +356,8 @@ function refreshRefMap(){
   if(!state.refFiles.length){ mapRefWrap.classList.add('hidden'); return; }
   mapRefWrap.classList.remove('hidden');
   const headers = state.refFiles[0].headerList;
-  fillSelect(selRefBsaoPrimary, headers, guessHeader(headers, ['ref. dsv','ref dsv','dsv','ref']));
-  fillSelect(selRefBsaoAlt, headers, guessHeader(headers, ['contra file','contra-file','contrafile','contra']));
+  fillSelect(selRefBsaoPrimary, headers, guessHeader(headers, ['ref. dsv','ref dsv','dsv','ref','house','shipment','processo']));
+  fillSelect(selRefBsaoAlt, headers, guessHeader(headers, ['contra file','contra-file','contrafile','contra','house','shipment']));
   fillSelect(selRefMas, headers, guessHeader(headers, ['ref. minebea','ref minebea','minebea','ref cliente','mas']));
 }
 
@@ -357,8 +365,8 @@ function refreshTgtMap(){
   if(!state.tgtFiles.length){ mapTgtWrap.classList.add('hidden'); return; }
   mapTgtWrap.classList.remove('hidden');
   const headers = state.tgtFiles[0].headerList;
-  fillSelect(selTgtBsaoPrimary, headers, guessHeader(headers, ['text']));
-  fillSelect(selTgtBsaoAlt, headers, guessHeader(headers, ['reference key 3','ref key 3']));
+  fillSelect(selTgtBsaoPrimary, headers, guessHeader(headers, ['text','house','shipment']));
+  fillSelect(selTgtBsaoAlt, headers, guessHeader(headers, ['reference key 3','ref key 3','text','house']));
   fillSelect(selTgtMas, headers, guessHeader(headers, ['ref cliente','ref. minebea','minebea','mas']));
 }
 
@@ -366,13 +374,13 @@ function refreshTgtMap(){
 dropRef.addEventListener('click', ()=>fileRefInput.click());
 fileRefInput.addEventListener('change', e=>handleFiles([...e.target.files],'ref'));
 dropRef.addEventListener('dragover', e=>{e.preventDefault(); dropRef.classList.add('drag');});
-dropRef.addEventListener('dragleave', ()=>dropRef.classList.remove('drag'));
+dropRef.addEventListener('dragleave', ()=>dropRef.classList.remove('drag'););
 dropRef.addEventListener('drop', e=>{ e.preventDefault(); dropRef.classList.remove('drag'); handleFiles([...e.dataTransfer.files],'ref'); });
 
 dropTgt.addEventListener('click', ()=>fileTgtInput.click());
 fileTgtInput.addEventListener('change', e=>handleFiles([...e.target.files],'tgt'));
 dropTgt.addEventListener('dragover', e=>{e.preventDefault(); dropTgt.classList.add('drag');});
-dropTgt.addEventListener('dragleave', ()=>dropTgt.classList.remove('drag'));
+dropTgt.addEventListener('dragleave', ()=>dropTgt.classList.remove('drag'););
 dropTgt.addEventListener('drop', e=>{ e.preventDefault(); dropTgt.classList.remove('drag'); handleFiles([...e.dataTransfer.files],'tgt'); });
 
 function checkReady(){ btnProcess.disabled = !(state.refFiles.length && state.tgtFiles.length); }
@@ -389,7 +397,7 @@ btnProcess.addEventListener('click', ()=>{
   const tgtBsaoAlt = selTgtBsaoAlt.value;
   const tgtMasCol = selTgtMas.value;
 
-  // 1. Mapeamento BSAO -> MAS (com fallback correto para a coluna alternativa)
+  // 1. Mapeamento (BSAO ou House/Shipment ID -> MAS)
   const bsaoMap = {};
   state.refFiles.forEach(f=>{
     const ws = f.wb.Sheets[f.sheetName];
@@ -400,23 +408,23 @@ btnProcess.addEventListener('click', ()=>{
 
     for(let r=f.headerRowIdx+1; r<=range.e.r; r++){
       const valP = cPrimary!==undefined ? ws[XLSX.utils.encode_cell({r,c:cPrimary})]?.v : '';
-      let bsao = extractBSAO(valP);
+      let refId = extractBSAO(valP);
 
-      if(!bsao && cAlt!==undefined && cAlt!==''){
+      if(!refId && cAlt!==undefined && cAlt!==''){
         const valA = ws[XLSX.utils.encode_cell({r,c:cAlt})]?.v;
-        bsao = extractBSAO(valA);
+        refId = extractBSAO(valA);
       }
 
-      if(bsao && cMas!==undefined){
+      if(refId && cMas!==undefined){
         const masVal = ws[XLSX.utils.encode_cell({r,c:cMas})]?.v;
         if(masVal!==undefined && masVal!==null && String(masVal).trim()!==''){
-          if(!bsaoMap[bsao]) bsaoMap[bsao] = String(masVal).trim();
+          if(!bsaoMap[refId]) bsaoMap[refId] = String(masVal).trim();
         }
       }
     }
   });
 
-  // 2. Preenchimento do AGING (com fallback correto para a coluna alternativa)
+  // 2. Preenchimento da planilha AGING
   let totals = {okCount:0, filledCount:0, noBsaoCount:0, noMasCount:0, divCount:0};
   modifiedFiles = [];
   lastOutput = [];
@@ -430,11 +438,11 @@ btnProcess.addEventListener('click', ()=>{
 
     for(let r=f.headerRowIdx+1; r<=range.e.r; r++){
       const valP = cPrimary!==undefined ? ws[XLSX.utils.encode_cell({r,c:cPrimary})]?.v : '';
-      let bsao = extractBSAO(valP);
+      let refId = extractBSAO(valP);
 
-      if(!bsao && cAlt!==undefined && cAlt!==''){
+      if(!refId && cAlt!==undefined && cAlt!==''){
         const valA = ws[XLSX.utils.encode_cell({r,c:cAlt})]?.v;
-        bsao = extractBSAO(valA);
+        refId = extractBSAO(valA);
       }
 
       const masCellAddr = XLSX.utils.encode_cell({r, c: cMas});
@@ -442,12 +450,12 @@ btnProcess.addEventListener('click', ()=>{
 
       let status = '', statusClass = '';
 
-      if(!bsao){
-        status = 'BSAO não localizado';
+      if(!refId){
+        status = 'BSAO / House ID não localizado';
         statusClass = 'bad';
         totals.noBsaoCount++;
-      } else if(bsaoMap[bsao]){
-        const foundMas = bsaoMap[bsao];
+      } else if(bsaoMap[refId]){
+        const foundMas = bsaoMap[refId];
         if(existingMas && existingMas !== foundMas){
           status = `Divergente (Existente: ${existingMas} / Encontrado: ${foundMas})`;
           statusClass = 'divergent';
@@ -466,15 +474,15 @@ btnProcess.addEventListener('click', ()=>{
           totals.filledCount++;
         }
       } else {
-        status = 'BSAO sem correspondência';
+        status = 'BSAO / House ID sem correspondência';
         statusClass = 'warn';
         totals.noMasCount++;
       }
 
       lastOutput.push({
         'Linha': r + 1,
-        'BSAO': bsao || 'N/A',
-        'MAS': existingMas || bsaoMap[bsao] || '',
+        'BSAO / House ID': refId || 'N/A',
+        'MAS': existingMas || bsaoMap[refId] || '',
         'Status': status,
         __statusClass: statusClass
       });
@@ -499,12 +507,12 @@ function renderResults(output, stats){
 
   const tbody = document.querySelector('#previewTable tbody');
   const thead = document.querySelector('#previewTable thead');
-  thead.innerHTML = '<tr><th>Linha</th><th>BSAO</th><th>MAS</th><th>Status</th></tr>';
+  thead.innerHTML = '<tr><th>Linha</th><th>BSAO / House ID</th><th>MAS</th><th>Status</th></tr>';
   
   tbody.innerHTML = output.slice(0, 50).map(r=>`
     <tr class="${r.__statusClass}">
       <td>${r.Linha}</td>
-      <td>${r.BSAO}</td>
+      <td>${r['BSAO / House ID']}</td>
       <td>${r.MAS}</td>
       <td>${r.Status}</td>
     </tr>
