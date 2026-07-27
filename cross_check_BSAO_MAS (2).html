@@ -70,7 +70,6 @@
     background:var(--paper); border:1px solid var(--line); border-radius:6px; padding:6px 10px;
   }
   .filelist .f .n{font-family:var(--mono); font-size:12px; flex:1;}
-  .filelist .f select.sheetSel{font-size:11px; padding:3px 6px; max-width:150px;}
   .filelist .f button{
     border:none;background:none;color:var(--bad);cursor:pointer;font-size:12px;font-weight:600; flex:none;
   }
@@ -235,7 +234,6 @@ function readWorkbookMeta(file){
     const reader = new FileReader();
     reader.onload = e => {
       try{
-        // IMPORTANTE: raw: true e cellStyles: true garantem que a estrutura interna permanece intacta
         const wb = XLSX.read(e.target.result, {type:'array', cellStyles:true, cellNF:true, cellDates:false});
         resolve({wb, name:file.name, rawBuffer: e.target.result});
       }catch(err){reject(err);}
@@ -383,7 +381,7 @@ btnProcess.addEventListener('click', ()=>{
   const tgtBsaoAlt = selTgtBsaoAlt.value;
   const tgtMasCol = selTgtMas.value;
 
-  // 1. Mapeamento BSAO -> MAS
+  // 1. Mapeamento BSAO -> MAS (com fallback correto para a coluna alternativa)
   const bsaoMap = {};
   state.refFiles.forEach(f=>{
     const ws = f.wb.Sheets[f.sheetName];
@@ -395,10 +393,13 @@ btnProcess.addEventListener('click', ()=>{
     for(let r=f.headerRowIdx+1; r<=range.e.r; r++){
       const valP = cPrimary!==undefined ? ws[XLSX.utils.encode_cell({r,c:cPrimary})]?.v : '';
       let bsao = extractBSAO(valP);
-      if(!bsao && cAlt!==undefined){
+
+      // Se não achou BSAO na coluna principal, tenta na alternativa
+      if(!bsao && cAlt!==undefined && cAlt!==''){
         const valA = ws[XLSX.utils.encode_cell({r,c:cAlt})]?.v;
         bsao = extractBSAO(valA);
       }
+
       if(bsao && cMas!==undefined){
         const masVal = ws[XLSX.utils.encode_cell({r,c:cMas})]?.v;
         if(masVal!==undefined && masVal!==null && String(masVal).trim()!==''){
@@ -408,7 +409,7 @@ btnProcess.addEventListener('click', ()=>{
     }
   });
 
-  // 2. Preenchimento in-place mantendo formatos originais
+  // 2. Preenchimento do AGING (com fallback correto para a coluna alternativa)
   let totals = {okCount:0, filledCount:0, noBsaoCount:0, noMasCount:0, divCount:0};
   modifiedFiles = [];
   lastOutput = [];
@@ -423,7 +424,9 @@ btnProcess.addEventListener('click', ()=>{
     for(let r=f.headerRowIdx+1; r<=range.e.r; r++){
       const valP = cPrimary!==undefined ? ws[XLSX.utils.encode_cell({r,c:cPrimary})]?.v : '';
       let bsao = extractBSAO(valP);
-      if(!bsao && cAlt!==undefined){
+
+      // Se não achou BSAO na coluna principal, tenta na alternativa
+      if(!bsao && cAlt!==undefined && cAlt!==''){
         const valA = ws[XLSX.utils.encode_cell({r,c:cAlt})]?.v;
         bsao = extractBSAO(valA);
       }
@@ -448,10 +451,10 @@ btnProcess.addEventListener('click', ()=>{
           statusClass = 'ok';
           totals.okCount++;
         } else {
-          // MODIFICAÇÃO IN-PLACE APENAS DO VALOR (Preserva formatação inteira da planilha)
+          // Preenche a célula alterando apenas o valor e mantendo formatação
           if(!ws[masCellAddr]) ws[masCellAddr] = { t: 's', v: '' };
           ws[masCellAddr].v = foundMas;
-          ws[masCellAddr].w = undefined; // Força re-renderização visual limpa no Excel
+          ws[masCellAddr].w = undefined;
 
           status = 'Preenchido automaticamente';
           statusClass = 'ok';
