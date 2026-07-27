@@ -138,7 +138,7 @@
   <header>
     <div class="eyebrow">Ferramenta de conferência · reutilizável</div>
     <h1>Cross-check Referência BSAO × Referência MAS</h1>
-    <p>Passo 1: a base de referência (a que tem Ref. DSV / Contra File / Ref. Minebea, ex.: controle de desembaraço) monta o mapa BSAO → MAS. Passo 2: os arquivos que precisam do MAS preenchido/conferido (ex.: AGING Desembaraço/Agenciamento) recebem o MAS cruzado a partir do BSAO que aparece neles. Linhas onde o BSAO não é achado, ou não tem correspondência, ficam destacadas.</p>
+    <p>Passo 1: a base de referência monta o mapa BSAO → MAS. Passo 2: os arquivos que precisam do MAS preenchido/conferido recebem o MAS cruzado a partir do BSAO. Linhas sem correspondência ficam destacadas.</p>
   </header>
 
   <div class="grid">
@@ -215,7 +215,8 @@
     </div>
 
     <div class="result-actions">
-      <button class="primary" id="btnDownload">Baixar planilha (.xlsx)</button>
+      <button class="primary" id="btnDownload">Baixar Planilha Atualizada (.xlsx)</button>
+      <button class="ghost" id="btnDownloadReport">Baixar Relatório de Conferência</button>
       <button class="ghost" id="btnReset">Recomeçar / novos arquivos</button>
       <span class="msg" id="downloadMsg"></span>
     </div>
@@ -225,18 +226,17 @@
   </div>
 
   <div class="footer-note">
-    Como funciona: a base de referência forma um mapa BSAO → MAS lendo primeiro a coluna principal e, se vazia/sem BSAO reconhecível, a coluna alternativa. Para cada linha da base a completar, o BSAO é extraído (padrão "BSAO" + números) da coluna principal, com fallback para a alternativa. Com o BSAO em mãos, busca o MAS no mapa. Se a base a completar já tiver uma coluna de MAS preenchida, ela é comparada com o MAS encontrado e divergências são sinalizadas. Tudo roda no navegador — nenhum arquivo é enviado para fora.
+    Como funciona: A aplicação atualiza as células do próprio arquivo Excel mantendo toda a formatação original (cores, fontes, bordas e largura de colunas).
   </div>
 </div>
 
 <script>
 const state = {
-  refFiles: [],  // {name, sheetNames, sheetIdx, headerRow, headers, rows}
+  refFiles: [],
   tgtFiles: [],
 };
 
 function detectHeaderRow(matrix){
-  // matrix: array of arrays (raw rows). Return index (0-based) of best header row.
   const limit = Math.min(matrix.length, 15);
   for(let i=0;i<limit;i++){
     const row = matrix[i]||[];
@@ -249,7 +249,7 @@ function detectHeaderRow(matrix){
 function sheetToRows(ws, headerRowIdx){
   const matrix = XLSX.utils.sheet_to_json(ws, {header:1, defval:'', raw:false});
   const rawHeaders = (matrix[headerRowIdx]||[]).map(h=>String(h).trim());
-  const headerColMap = {}; // headerName -> raw column index (preserves position for write-back)
+  const headerColMap = {};
   rawHeaders.forEach((h,idx)=>{ if(h && !(h in headerColMap)) headerColMap[h]=idx; });
   const rows = [];
   for(let i=headerRowIdx+1;i<matrix.length;i++){
@@ -267,7 +267,8 @@ function readWorkbookMeta(file){
     const reader = new FileReader();
     reader.onload = e => {
       try{
-        const wb = XLSX.read(e.target.result, {type:'array', cellDates:true});
+        // cellStyles: true e cellNF: true preservam estilos e formatação numérica
+        const wb = XLSX.read(e.target.result, {type:'array', cellDates:true, cellStyles:true, cellNF:true});
         resolve({wb, name:file.name});
       }catch(err){reject(err);}
     };
@@ -284,7 +285,6 @@ function buildFromSheet(wb, sheetName){
 }
 
 function pickDefaultSheet(wb){
-  // choose sheet with most non-empty cells (skip obviously tiny "about" sheets when others exist)
   let best = wb.SheetNames[0], bestScore=-1;
   wb.SheetNames.forEach(name=>{
     const ws = wb.Sheets[name];
@@ -431,10 +431,9 @@ function checkReady(){
 
 // ---------- Processing ----------
 let lastOutput = [];
-let modifiedTargetFiles = []; // {name, wb}
+let modifiedTargetFiles = [];
 
 function ensureCol(ws, range, headerRowIdx, headerName){
-  // Returns the column index for headerName: reuses it if it already exists in the header row, else appends a new column.
   for(let c=range.s.c; c<=range.e.c; c++){
     const addr = XLSX.utils.encode_cell({r:headerRowIdx, c});
     const cell = ws[addr];
@@ -461,7 +460,6 @@ function writeBackTargetFile(f, tgtBsaoPrimary, tgtBsaoAlt, tgtMasCol, bsaoMap){
   const preview = [];
 
   for(let r=headerRowIdx+1; r<=range.e.r; r++){
-    // check if row has any content at all
     let hasContent=false;
     for(let c=range.s.c;c<=range.e.c;c++){
       const cell = ws[XLSX.utils.encode_cell({r,c})];
@@ -501,7 +499,7 @@ function writeBackTargetFile(f, tgtBsaoPrimary, tgtBsaoAlt, tgtMasCol, bsaoMap){
         statusClass = 'ok';
         okCount++;
       } else {
-        // fill the blank MAS cell in place
+        // Altera diretamente o valor da célula mantendo seu formato original
         ws[XLSX.utils.encode_cell({r,c:masColIdx})] = {t:'s', v: foundMas};
         status = '🟢 Preenchido automaticamente';
         statusClass = 'ok';
@@ -516,7 +514,6 @@ function writeBackTargetFile(f, tgtBsaoPrimary, tgtBsaoAlt, tgtMasCol, bsaoMap){
     ws[XLSX.utils.encode_cell({r,c:bsaoColIdx})] = {t:'s', v: bsao||''};
     ws[XLSX.utils.encode_cell({r,c:statusColIdx})] = {t:'s', v: status};
 
-    // build a light row snapshot for the on-screen preview
     const snap = {'Arquivo de origem': f.name};
     Object.keys(colMap).forEach(h=>{
       const cell = ws[XLSX.utils.encode_cell({r,c:colMap[h]})];
@@ -525,7 +522,7 @@ function writeBackTargetFile(f, tgtBsaoPrimary, tgtBsaoAlt, tgtMasCol, bsaoMap){
     snap['BSAO identificado'] = bsao||'';
     snap['MAS (após cruzamento)'] = existingMas || foundMas || '';
     snap['Status'] = status;
-    preview.push({...snap, __statusClass: statusClass});
+    preview.push({...snap, __statusClass: statusClass, __arquivoOrigem: f.name});
   }
 
   ws['!ref'] = XLSX.utils.encode_range(range);
@@ -540,7 +537,6 @@ btnProcess.addEventListener('click', ()=>{
   const tgtBsaoAlt = selTgtBsaoAlt.value;
   const tgtMasCol = selTgtMas.value;
 
-  // Build BSAO -> MAS map from reference files
   const bsaoMap = {};
   state.refFiles.forEach(f=>{
     f.rows.forEach(row=>{
@@ -568,7 +564,7 @@ btnProcess.addEventListener('click', ()=>{
     totals.noMasCount += stats.noMasCount;
     totals.divCount += stats.divCount;
     output = output.concat(preview);
-    modifiedTargetFiles.push({name:f.name, wb:f.wb});
+    modifiedTargetFiles.push({name: f.name, wb: f.wb});
   });
 
   lastOutput = output;
@@ -588,7 +584,6 @@ function renderResults(output, stats){
 
   if(!output.length) return;
   const cols = Object.keys(output[0]).filter(k=>!k.startsWith('__'));
-  cols.unshift('Arquivo de origem');
   const thead = document.querySelector('#previewTable thead');
   const tbody = document.querySelector('#previewTable tbody');
   thead.innerHTML = '<tr>'+cols.map(c=>`<th>${c}</th>`).join('')+'</tr>';
@@ -599,22 +594,31 @@ function renderResults(output, stats){
   tbody.innerHTML = sorted.map(r=>{
     return `<tr class="${r.__statusClass}">` +
       cols.map(c=>{
-        const v = c==='Arquivo de origem' ? r.__arquivoOrigem : r[c];
+        const v = r[c];
         return `<td>${v!==undefined&&v!==null?String(v).slice(0,60):''}</td>`;
       }).join('') +
       '</tr>';
   }).join('');
 }
 
+// Baixa o arquivo original preservando 100% da formatação e estilos
 document.getElementById('btnDownload').addEventListener('click', ()=>{
+  if(!modifiedTargetFiles.length) return;
+  modifiedTargetFiles.forEach(f => {
+    XLSX.writeFile(f.wb, `Atualizado_${f.name}`);
+  });
+  document.getElementById('downloadMsg').textContent = 'Planilha atualizada baixada ✓';
+});
+
+// Gera relatório consolidado
+document.getElementById('btnDownloadReport').addEventListener('click', ()=>{
   if(!lastOutput.length) return;
-  const rows = lastOutput.map(({__statusClass, __arquivoOrigem, ...rest})=>({'Arquivo de origem':__arquivoOrigem, ...rest}));
+  const rows = lastOutput.map(({__statusClass, ...rest})=>rest);
   const ws = XLSX.utils.json_to_sheet(rows);
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Cross-check BSAO x MAS');
+  XLSX.utils.book_append_sheet(wb, ws, 'Relatorio_CrossCheck');
   const ts = new Date().toISOString().slice(0,10);
-  XLSX.writeFile(wb, `cross_check_BSAO_MAS_${ts}.xlsx`);
-  document.getElementById('downloadMsg').textContent = 'Baixado ✓';
+  XLSX.writeFile(wb, `Relatorio_CrossCheck_${ts}.xlsx`);
 });
 
 document.getElementById('btnReset').addEventListener('click', ()=>{
