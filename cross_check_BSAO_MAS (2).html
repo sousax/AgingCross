@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Cross-check BSAO x MAS</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#101a2b;
+    --paper:#f5f6f8;
+    --panel:#ffffff;
+    --line:#dde1e8;
+    --accent:#1f4fd8;
+    --accent-dim:#e8edfc;
+    --ok:#0f8a4b;
+    --ok-bg:#e9f8ef;
+    --warn:#b8860b;
+    --warn-bg:#fdf5e2;
+    --bad:#c22b2b;
+    --bad-bg:#fdeaea;
+    --div:#7a3fc2;
+    --div-bg:#f2eafc;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    padding:32px 24px 80px;
+  }
+  .wrap{max-width:1220px;margin:0 auto;}
+  header{margin-bottom:28px;}
+  header .eyebrow{
+    font-size:12px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--accent); font-weight:700; margin-bottom:6px;
+  }
+  h1{font-size:26px; margin:0 0 6px; letter-spacing:-0.01em;}
+  header p{margin:0; color:#5b6478; font-size:14.5px; max-width:760px; line-height:1.5;}
+
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:20px;}
+  @media (max-width:920px){.grid{grid-template-columns:1fr;}}
+
+  .card{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:20px 22px; position:relative;
+  }
+  .card h2{
+    font-size:14px; margin:0 0 4px; display:flex; align-items:center; gap:8px;
+  }
+  .step-num{
+    width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;
+    font-size:12px;display:inline-flex;align-items:center;justify-content:center;
+    font-weight:700; flex:none;
+  }
+  .card .sub{font-size:12.5px;color:#6b7284;margin:0 0 16px; line-height:1.5;}
+
+  .drop{
+    border:1.5px dashed #c4cad8; border-radius:8px; padding:18px;
+    text-align:center; font-size:13px; color:#6b7284; cursor:pointer;
+    transition:border-color .15s, background .15s;
+  }
+  .drop:hover, .drop.drag{border-color:var(--accent); background:var(--accent-dim);}
+  .drop input{display:none;}
+
+  .filelist{margin-top:10px; font-size:12.5px; display:flex; flex-direction:column; gap:6px;}
+  .filelist .f{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    background:var(--paper); border:1px solid var(--line); border-radius:6px; padding:6px 10px;
+  }
+  .filelist .f .n{font-family:var(--mono); font-size:12px; flex:1;}
+  .filelist .f select.sheetSel{font-size:11px; padding:3px 6px; max-width:150px;}
+  .filelist .f button{
+    border:none;background:none;color:var(--bad);cursor:pointer;font-size:12px;font-weight:600; flex:none;
+  }
+
+  .map-row{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px;}
+  .field label{
+    display:block; font-size:11.5px; font-weight:600; color:#4a5064; margin-bottom:5px;
+    text-transform:uppercase; letter-spacing:.03em;
+  }
+  select{
+    width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:6px;
+    font-size:13px; background:#fff; color:var(--ink);
+  }
+  .hint{font-size:11.5px;color:#8a90a1; margin-top:4px;}
+
+  .actions{margin:26px 0; text-align:center;}
+  button.primary{
+    background:var(--accent); color:#fff; border:none; padding:13px 34px;
+    font-size:14.5px; font-weight:700; border-radius:8px; cursor:pointer;
+    box-shadow:0 2px 0 rgba(0,0,0,.06);
+  }
+  button.primary:disabled{background:#c6cbda; cursor:not-allowed;}
+  button.ghost{
+    background:none;border:1px solid var(--line); color:#4a5064; padding:9px 18px;
+    border-radius:8px; font-size:13px; cursor:pointer; font-weight:600;
+  }
+
+  .summary{display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin:22px 0;}
+  @media (max-width:960px){.summary{grid-template-columns:1fr 1fr;}}
+  .stat{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:16px 18px;
+  }
+  .stat .num{font-size:26px; font-weight:800; letter-spacing:-0.02em;}
+  .stat .lbl{font-size:12px; color:#6b7284; margin-top:2px;}
+  .stat.ok .num{color:var(--ok);}
+  .stat.bad .num{color:var(--bad);}
+  .stat.warn .num{color:var(--warn);}
+  .stat.div .num{color:var(--div);}
+
+  table{width:100%; border-collapse:collapse; font-size:12.5px; background:#fff;}
+  thead th{
+    text-align:left; background:#f0f2f6; padding:9px 10px; border-bottom:1px solid var(--line);
+    font-size:11px; text-transform:uppercase; letter-spacing:.03em; color:#4a5064; position:sticky; top:0;
+  }
+  tbody td{padding:8px 10px; border-bottom:1px solid #eef0f4; font-family:var(--mono); font-size:12px; white-space:nowrap;}
+  tbody tr.ok td{background:var(--ok-bg);}
+  tbody tr.warn td{background:var(--warn-bg);}
+  tbody tr.bad td{background:var(--bad-bg);}
+  tbody tr.divergent td{background:var(--div-bg);}
+  .table-wrap{max-height:480px; overflow:auto; border:1px solid var(--line); border-radius:10px;}
+
+  .result-actions{display:flex; gap:12px; align-items:center; margin:18px 0 8px; flex-wrap:wrap;}
+  .msg{font-size:13px; color:#6b7284;}
+  .section-title{font-size:15px; font-weight:700; margin:34px 0 4px;}
+  .footer-note{font-size:12px; color:#8a90a1; margin-top:34px; line-height:1.6; border-top:1px solid var(--line); padding-top:16px;}
+  .hidden{display:none !important;}
+  .legend{display:flex; gap:16px; flex-wrap:wrap; font-size:12px; margin:10px 0 0; color:#4a5064;}
+  .legend span{display:inline-flex; align-items:center; gap:6px;}
+  .dot{width:10px;height:10px;border-radius:3px; display:inline-block;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Ferramenta de conferência · reutilizável</div>
+    <h1>Cross-check Referência BSAO × Referência MAS</h1>
+    <p>Passo 1: a base de referência (a que tem Ref. DSV / Contra File / Ref. Minebea, ex.: controle de desembaraço) monta o mapa BSAO → MAS. Passo 2: os arquivos que precisam do MAS preenchido/conferido (ex.: AGING Desembaraço/Agenciamento) recebem o MAS cruzado a partir do BSAO que aparece neles. Linhas onde o BSAO não é achado, ou não tem correspondência, ficam destacadas.</p>
+  </header>
+
+  <div class="grid">
+    <!-- STEP 1 -->
+    <div class="card">
+      <h2><span class="step-num">1</span> Base de referência (BSAO → MAS)</h2>
+      <p class="sub">Arquivo com os campos de BSAO (ex.: <strong>Ref. DSV</strong> e <strong>Contra File</strong>) e o MAS (ex.: <strong>Ref. Minebea</strong>) já pareados na mesma linha.</p>
+      <label class="drop" id="dropRef">
+        <input type="file" id="fileRef" multiple accept=".xlsx,.xls,.csv">
+        Clique ou arraste o(s) arquivo(s) aqui
+      </label>
+      <div class="filelist" id="listRef"></div>
+
+      <div class="map-row hidden" id="mapRefWrap">
+        <div class="field">
+          <label>Coluna BSAO — principal</label>
+          <select id="selRefBsaoPrimary"></select>
+          <div class="hint">Ex.: "Ref. DSV"</div>
+        </div>
+        <div class="field">
+          <label>Coluna BSAO — alternativa</label>
+          <select id="selRefBsaoAlt"></select>
+          <div class="hint">Usada só se não achar na principal. Ex.: "Contra File"</div>
+        </div>
+        <div class="field" style="grid-column:1 / -1">
+          <label>Coluna MAS</label>
+          <select id="selRefMas"></select>
+          <div class="hint">Ex.: "Ref. Minebea"</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 2 -->
+    <div class="card">
+      <h2><span class="step-num">2</span> Base a completar/conferir (AGING)</h2>
+      <p class="sub">Arquivo(s) onde o BSAO aparece dentro de um texto (ex.: "Text" ou "Reference Key 3") e o MAS pode estar vazio ou precisa ser conferido.</p>
+      <label class="drop" id="dropTgt">
+        <input type="file" id="fileTgt" multiple accept=".xlsx,.xls,.csv">
+        Clique ou arraste o(s) arquivo(s) aqui
+      </label>
+      <div class="filelist" id="listTgt"></div>
+
+      <div class="map-row hidden" id="mapTgtWrap">
+        <div class="field">
+          <label>Coluna BSAO — principal</label>
+          <select id="selTgtBsaoPrimary"></select>
+          <div class="hint">Ex.: "Text"</div>
+        </div>
+        <div class="field">
+          <label>Coluna BSAO — alternativa</label>
+          <select id="selTgtBsaoAlt"></select>
+          <div class="hint">Ex.: "Reference Key 3"</div>
+        </div>
+        <div class="field" style="grid-column:1 / -1">
+          <label>Coluna MAS já existente (opcional, p/ conferir divergência)</label>
+          <select id="selTgtMas"></select>
+          <div class="hint">Ex.: "Ref Cliente". Deixe em "nenhuma" se não houver.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="primary" id="btnProcess" disabled>Processar cruzamento</button>
+  </div>
+
+  <div id="results" class="hidden">
+    <div class="summary" id="summary"></div>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--ok)"></span> OK — MAS encontrado</span>
+      <span><span class="dot" style="background:var(--div)"></span> Divergente — MAS existente ≠ MAS encontrado</span>
+      <span><span class="dot" style="background:var(--warn)"></span> BSAO achado, sem correspondência na base de referência</span>
+      <span><span class="dot" style="background:var(--bad)"></span> BSAO não localizado na linha</span>
+    </div>
+
+    <div class="result-actions">
+      <button class="primary" id="btnDownload">Baixar planilha (.xlsx)</button>
+      <button class="ghost" id="btnReset">Recomeçar / novos arquivos</button>
+      <span class="msg" id="downloadMsg"></span>
+    </div>
+
+    <div class="section-title">Prévia (linhas problemáticas no topo)</div>
+    <div class="table-wrap"><table id="previewTable"><thead></thead><tbody></tbody></table></div>
+  </div>
+
+  <div class="footer-note">
+    Como funciona: a base de referência forma um mapa BSAO → MAS lendo primeiro a coluna principal e, se vazia/sem BSAO reconhecível, a coluna alternativa. Para cada linha da base a completar, o BSAO é extraído (padrão "BSAO" + números) da coluna principal, com fallback para a alternativa. Com o BSAO em mãos, busca o MAS no mapa. Se a base a completar já tiver uma coluna de MAS preenchida, ela é comparada com o MAS encontrado e divergências são sinalizadas. Tudo roda no navegador — nenhum arquivo é enviado para fora.
+  </div>
+</div>
+
+<script>
+const state = {
+  refFiles: [],  // {name, sheetNames, sheetIdx, headerRow, headers, rows}
+  tgtFiles: [],
+};
+
+function detectHeaderRow(matrix){
+  // matrix: array of arrays (raw rows). Return index (0-based) of best header row.
+  const limit = Math.min(matrix.length, 15);
+  for(let i=0;i<limit;i++){
+    const row = matrix[i]||[];
+    const nonEmpty = row.filter(c=>c!==null && c!==undefined && String(c).trim()!=='').length;
+    if(nonEmpty>=4) return i;
+  }
+  return 0;
+}
+
+function sheetToRows(ws, headerRowIdx){
+  const matrix = XLSX.utils.sheet_to_json(ws, {header:1, defval:'', raw:false});
+  const rawHeaders = (matrix[headerRowIdx]||[]).map(h=>String(h).trim());
+  const headerColMap = {}; // headerName -> raw column index (preserves position for write-back)
+  rawHeaders.forEach((h,idx)=>{ if(h && !(h in headerColMap)) headerColMap[h]=idx; });
+  const rows = [];
+  for(let i=headerRowIdx+1;i<matrix.length;i++){
+    const r = matrix[i];
+    if(!r || r.every(c=>c===''||c===null||c===undefined)) continue;
+    const obj = {};
+    rawHeaders.forEach((h,idx)=>{ if(h) obj[h]=r[idx]!==undefined?r[idx]:''; });
+    rows.push(obj);
+  }
+  return {headers: rawHeaders.filter(h=>h), rows, headerRowIdx, headerColMap, matrix};
+}
+
+function readWorkbookMeta(file){
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onload = e => {
+      try{
+        const wb = XLSX.read(e.target.result, {type:'array', cellDates:true});
+        resolve({wb, name:file.name});
+      }catch(err){reject(err);}
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function buildFromSheet(wb, sheetName){
+  const ws = wb.Sheets[sheetName];
+  const matrix = XLSX.utils.sheet_to_json(ws, {header:1, defval:'', raw:false});
+  const headerRowIdx = detectHeaderRow(matrix);
+  return sheetToRows(ws, headerRowIdx);
+}
+
+function pickDefaultSheet(wb){
+  // choose sheet with most non-empty cells (skip obviously tiny "about" sheets when others exist)
+  let best = wb.SheetNames[0], bestScore=-1;
+  wb.SheetNames.forEach(name=>{
+    const ws = wb.Sheets[name];
+    const range = XLSX.utils.decode_range(ws['!ref']||'A1:A1');
+    const score = (range.e.r+1)*(range.e.c+1);
+    if(score>bestScore){bestScore=score; best=name;}
+  });
+  return best;
+}
+
+function guessHeader(headers, patterns){
+  const lower = headers.map(h=>String(h).toLowerCase());
+  for(const p of patterns){
+    const idx = lower.findIndex(h=>h===p);
+    if(idx>-1) return headers[idx];
+  }
+  for(const p of patterns){
+    const idx = lower.findIndex(h=>h.includes(p));
+    if(idx>-1) return headers[idx];
+  }
+  return headers[0]||'';
+}
+
+function fillSelect(sel, headers, selected){
+  sel.innerHTML = '<option value="">— nenhuma —</option>' +
+    headers.map(h=>`<option value="${h}" ${h===selected?'selected':''}>${h}</option>`).join('');
+}
+
+function extractBSAO(val){
+  if(val===null||val===undefined) return null;
+  const s = String(val);
+  const m = s.match(/BSAO\s*0*\d+/i);
+  if(!m) return null;
+  return m[0].replace(/\s+/g,'').toUpperCase();
+}
+
+function cellVal(row, col){
+  if(!col) return '';
+  return row[col];
+}
+
+// ---------- DOM refs ----------
+const dropRef = document.getElementById('dropRef');
+const fileRefInput = document.getElementById('fileRef');
+const listRefEl = document.getElementById('listRef');
+const mapRefWrap = document.getElementById('mapRefWrap');
+const selRefBsaoPrimary = document.getElementById('selRefBsaoPrimary');
+const selRefBsaoAlt = document.getElementById('selRefBsaoAlt');
+const selRefMas = document.getElementById('selRefMas');
+
+const dropTgt = document.getElementById('dropTgt');
+const fileTgtInput = document.getElementById('fileTgt');
+const listTgtEl = document.getElementById('listTgt');
+const mapTgtWrap = document.getElementById('mapTgtWrap');
+const selTgtBsaoPrimary = document.getElementById('selTgtBsaoPrimary');
+const selTgtBsaoAlt = document.getElementById('selTgtBsaoAlt');
+const selTgtMas = document.getElementById('selTgtMas');
+
+const btnProcess = document.getElementById('btnProcess');
+
+function sheetOptionsHtml(sheetNames, selected){
+  return sheetNames.map(s=>`<option value="${s}" ${s===selected?'selected':''}>${s}</option>`).join('');
+}
+
+function renderList(container, files, group){
+  container.innerHTML = files.map((f,i)=>`
+    <div class="f">
+      <span class="n">${f.name} (${f.rows.length}L)</span>
+      ${f.sheetNames.length>1 ? `<select class="sheetSel" data-i="${i}" data-group="${group}">${sheetOptionsHtml(f.sheetNames,f.sheetName)}</select>` : ''}
+      <button data-i="${i}" data-group="${group}" class="rmBtn">remover</button>
+    </div>
+  `).join('');
+  container.querySelectorAll('.rmBtn').forEach(b=>{
+    b.onclick = ()=>{
+      const arr = group==='ref'?state.refFiles:state.tgtFiles;
+      arr.splice(+b.dataset.i,1);
+      renderList(container, arr, group);
+      if(group==='ref') refreshRefMap(); else refreshTgtMap();
+      checkReady();
+    };
+  });
+  container.querySelectorAll('.sheetSel').forEach(sel=>{
+    sel.onchange = async ()=>{
+      const arr = group==='ref'?state.refFiles:state.tgtFiles;
+      const f = arr[+sel.dataset.i];
+      const built = buildFromSheet(f.wb, sel.value);
+      f.sheetName = sel.value; f.headers = built.headers; f.rows = built.rows;
+      f.headerRowIdx = built.headerRowIdx; f.headerColMap = built.headerColMap;
+      renderList(container, arr, group);
+      if(group==='ref') refreshRefMap(); else refreshTgtMap();
+    };
+  });
+}
+
+function refreshRefMap(){
+  if(!state.refFiles.length){ mapRefWrap.classList.add('hidden'); return; }
+  mapRefWrap.classList.remove('hidden');
+  const headers = state.refFiles[0].headers;
+  fillSelect(selRefBsaoPrimary, headers, guessHeader(headers, ['ref. dsv','ref dsv','dsv','ref']));
+  fillSelect(selRefBsaoAlt, headers, guessHeader(headers, ['contra file','contra-file','contrafile','contra']));
+  fillSelect(selRefMas, headers, guessHeader(headers, ['ref. minebea','ref minebea','minebea','ref cliente','referência mas','mas']));
+}
+
+function refreshTgtMap(){
+  if(!state.tgtFiles.length){ mapTgtWrap.classList.add('hidden'); return; }
+  mapTgtWrap.classList.remove('hidden');
+  const headers = state.tgtFiles[0].headers;
+  fillSelect(selTgtBsaoPrimary, headers, guessHeader(headers, ['text']));
+  fillSelect(selTgtBsaoAlt, headers, guessHeader(headers, ['reference key 3','ref key 3','reference key']));
+  fillSelect(selTgtMas, headers, guessHeader(headers, ['ref cliente','ref. minebea','minebea','mas']));
+}
+
+async function handleFiles(files, group){
+  for(const file of files){
+    try{
+      const {wb, name} = await readWorkbookMeta(file);
+      const sheetName = pickDefaultSheet(wb);
+      const built = buildFromSheet(wb, sheetName);
+      const entry = {name, wb, sheetNames: wb.SheetNames, sheetName, headers: built.headers, rows: built.rows,
+        headerRowIdx: built.headerRowIdx, headerColMap: built.headerColMap};
+      if(group==='ref') state.refFiles.push(entry); else state.tgtFiles.push(entry);
+    }catch(err){ alert('Erro ao ler '+file.name+': '+err.message); }
+  }
+  if(group==='ref'){ renderList(listRefEl, state.refFiles, 'ref'); refreshRefMap(); }
+  else { renderList(listTgtEl, state.tgtFiles, 'tgt'); refreshTgtMap(); }
+  checkReady();
+}
+
+dropRef.addEventListener('click', ()=>fileRefInput.click());
+fileRefInput.addEventListener('change', e=>handleFiles([...e.target.files],'ref'));
+dropRef.addEventListener('dragover', e=>{e.preventDefault(); dropRef.classList.add('drag');});
+dropRef.addEventListener('dragleave', ()=>dropRef.classList.remove('drag'));
+dropRef.addEventListener('drop', e=>{ e.preventDefault(); dropRef.classList.remove('drag'); handleFiles([...e.dataTransfer.files],'ref'); });
+
+dropTgt.addEventListener('click', ()=>fileTgtInput.click());
+fileTgtInput.addEventListener('change', e=>handleFiles([...e.target.files],'tgt'));
+dropTgt.addEventListener('dragover', e=>{e.preventDefault(); dropTgt.classList.add('drag');});
+dropTgt.addEventListener('dragleave', ()=>dropTgt.classList.remove('drag'));
+dropTgt.addEventListener('drop', e=>{ e.preventDefault(); dropTgt.classList.remove('drag'); handleFiles([...e.dataTransfer.files],'tgt'); });
+
+function checkReady(){
+  btnProcess.disabled = !(state.refFiles.length && state.tgtFiles.length);
+}
+
+// ---------- Processing ----------
+let lastOutput = [];
+let modifiedTargetFiles = []; // {name, wb}
+
+function ensureCol(ws, range, headerRowIdx, headerName){
+  // Returns the column index for headerName: reuses it if it already exists in the header row, else appends a new column.
+  for(let c=range.s.c; c<=range.e.c; c++){
+    const addr = XLSX.utils.encode_cell({r:headerRowIdx, c});
+    const cell = ws[addr];
+    if(cell && String(cell.v).trim()===headerName) return c;
+  }
+  const newCol = range.e.c+1;
+  const addr = XLSX.utils.encode_cell({r:headerRowIdx, c:newCol});
+  ws[addr] = {t:'s', v:headerName};
+  range.e.c = newCol;
+  return newCol;
+}
+
+function writeBackTargetFile(f, tgtBsaoPrimary, tgtBsaoAlt, tgtMasCol, bsaoMap){
+  const ws = f.wb.Sheets[f.sheetName];
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  const headerRowIdx = f.headerRowIdx;
+  const colMap = f.headerColMap;
+
+  const bsaoColIdx = ensureCol(ws, range, headerRowIdx, 'BSAO identificado');
+  const statusColIdx = ensureCol(ws, range, headerRowIdx, 'Status BSAO x MAS');
+  const masColIdx = tgtMasCol ? colMap[tgtMasCol] : ensureCol(ws, range, headerRowIdx, 'MAS (preenchido automaticamente)');
+
+  let okCount=0, filledCount=0, noBsaoCount=0, noMasCount=0, divCount=0;
+  const preview = [];
+
+  for(let r=headerRowIdx+1; r<=range.e.r; r++){
+    // check if row has any content at all
+    let hasContent=false;
+    for(let c=range.s.c;c<=range.e.c;c++){
+      const cell = ws[XLSX.utils.encode_cell({r,c})];
+      if(cell && cell.v!==undefined && cell.v!==null && String(cell.v).trim()!==''){ hasContent=true; break; }
+    }
+    if(!hasContent) continue;
+
+    const primaryColIdx = colMap[tgtBsaoPrimary];
+    const altColIdx = tgtBsaoAlt ? colMap[tgtBsaoAlt] : undefined;
+    const primaryVal = primaryColIdx!==undefined ? ws[XLSX.utils.encode_cell({r,c:primaryColIdx})]?.v : '';
+    let bsao = extractBSAO(primaryVal);
+    let via = 'principal';
+    if(!bsao && altColIdx!==undefined){
+      const altVal = ws[XLSX.utils.encode_cell({r,c:altColIdx})]?.v;
+      bsao = extractBSAO(altVal);
+      via = 'alternativa';
+    }
+
+    const existingMasCell = ws[XLSX.utils.encode_cell({r,c:masColIdx})];
+    const existingMas = existingMasCell && existingMasCell.v!==undefined ? String(existingMasCell.v).trim() : '';
+
+    let status, statusClass, foundMas='';
+
+    if(!bsao){
+      status = '🔴 BSAO não localizado na linha';
+      statusClass = 'bad';
+      via='';
+      noBsaoCount++;
+    } else if(bsaoMap[bsao]){
+      foundMas = bsaoMap[bsao].mas;
+      if(existingMas && existingMas!==foundMas){
+        status = `🟣 Divergente (existente: ${existingMas} / encontrado: ${foundMas})`;
+        statusClass = 'divergent';
+        divCount++;
+      } else if(existingMas){
+        status = '🟢 OK (já preenchido, confere)';
+        statusClass = 'ok';
+        okCount++;
+      } else {
+        // fill the blank MAS cell in place
+        ws[XLSX.utils.encode_cell({r,c:masColIdx})] = {t:'s', v: foundMas};
+        status = '🟢 Preenchido automaticamente';
+        statusClass = 'ok';
+        filledCount++;
+      }
+    } else {
+      status = '🟡 BSAO sem correspondência na base de referência';
+      statusClass = 'warn';
+      noMasCount++;
+    }
+
+    ws[XLSX.utils.encode_cell({r,c:bsaoColIdx})] = {t:'s', v: bsao||''};
+    ws[XLSX.utils.encode_cell({r,c:statusColIdx})] = {t:'s', v: status};
+
+    // build a light row snapshot for the on-screen preview
+    const snap = {'Arquivo de origem': f.name};
+    Object.keys(colMap).forEach(h=>{
+      const cell = ws[XLSX.utils.encode_cell({r,c:colMap[h]})];
+      snap[h] = cell ? cell.v : '';
+    });
+    snap['BSAO identificado'] = bsao||'';
+    snap['MAS (após cruzamento)'] = existingMas || foundMas || '';
+    snap['Status'] = status;
+    preview.push({...snap, __statusClass: statusClass});
+  }
+
+  ws['!ref'] = XLSX.utils.encode_range(range);
+  return {stats:{okCount, filledCount, noBsaoCount, noMasCount, divCount}, preview};
+}
+
+btnProcess.addEventListener('click', ()=>{
+  const refBsaoPrimary = selRefBsaoPrimary.value;
+  const refBsaoAlt = selRefBsaoAlt.value;
+  const refMasCol = selRefMas.value;
+  const tgtBsaoPrimary = selTgtBsaoPrimary.value;
+  const tgtBsaoAlt = selTgtBsaoAlt.value;
+  const tgtMasCol = selTgtMas.value;
+
+  // Build BSAO -> MAS map from reference files
+  const bsaoMap = {};
+  state.refFiles.forEach(f=>{
+    f.rows.forEach(row=>{
+      let bsao = extractBSAO(cellVal(row,refBsaoPrimary));
+      let via = 'principal';
+      if(!bsao && refBsaoAlt){ bsao = extractBSAO(cellVal(row,refBsaoAlt)); via='alternativa'; }
+      if(bsao){
+        const mas = cellVal(row,refMasCol);
+        if(mas!==undefined && mas!==null && String(mas).trim()!==''){
+          if(!bsaoMap[bsao]) bsaoMap[bsao] = { mas: String(mas).trim(), file:f.name, via };
+        }
+      }
+    });
+  });
+
+  let totals = {okCount:0, filledCount:0, noBsaoCount:0, noMasCount:0, divCount:0};
+  let output = [];
+  modifiedTargetFiles = [];
+
+  state.tgtFiles.forEach(f=>{
+    const {stats, preview} = writeBackTargetFile(f, tgtBsaoPrimary, tgtBsaoAlt, tgtMasCol, bsaoMap);
+    totals.okCount += stats.okCount;
+    totals.filledCount += stats.filledCount;
+    totals.noBsaoCount += stats.noBsaoCount;
+    totals.noMasCount += stats.noMasCount;
+    totals.divCount += stats.divCount;
+    output = output.concat(preview);
+    modifiedTargetFiles.push({name:f.name, wb:f.wb});
+  });
+
+  lastOutput = output;
+  totals.total = output.length;
+  renderResults(output, totals);
+});
+
+function renderResults(output, stats){
+  document.getElementById('results').classList.remove('hidden');
+  document.getElementById('summary').innerHTML = `
+    <div class="stat"><div class="num">${stats.total}</div><div class="lbl">Total de linhas</div></div>
+    <div class="stat ok"><div class="num">${stats.filledCount}</div><div class="lbl">MAS preenchido agora</div></div>
+    <div class="stat ok"><div class="num">${stats.okCount}</div><div class="lbl">Já estava OK</div></div>
+    <div class="stat div"><div class="num">${stats.divCount}</div><div class="lbl">Divergente</div></div>
+    <div class="stat bad"><div class="num">${stats.noMasCount + stats.noBsaoCount}</div><div class="lbl">Não encontrado</div></div>
+  `;
+
+  if(!output.length) return;
+  const cols = Object.keys(output[0]).filter(k=>!k.startsWith('__'));
+  cols.unshift('Arquivo de origem');
+  const thead = document.querySelector('#previewTable thead');
+  const tbody = document.querySelector('#previewTable tbody');
+  thead.innerHTML = '<tr>'+cols.map(c=>`<th>${c}</th>`).join('')+'</tr>';
+
+  const order = {bad:0, warn:1, divergent:2, ok:3};
+  const sorted = [...output].sort((a,b)=>order[a.__statusClass]-order[b.__statusClass]);
+
+  tbody.innerHTML = sorted.map(r=>{
+    return `<tr class="${r.__statusClass}">` +
+      cols.map(c=>{
+        const v = c==='Arquivo de origem' ? r.__arquivoOrigem : r[c];
+        return `<td>${v!==undefined&&v!==null?String(v).slice(0,60):''}</td>`;
+      }).join('') +
+      '</tr>';
+  }).join('');
+}
+
+document.getElementById('btnDownload').addEventListener('click', ()=>{
+  if(!lastOutput.length) return;
+  const rows = lastOutput.map(({__statusClass, __arquivoOrigem, ...rest})=>({'Arquivo de origem':__arquivoOrigem, ...rest}));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Cross-check BSAO x MAS');
+  const ts = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `cross_check_BSAO_MAS_${ts}.xlsx`);
+  document.getElementById('downloadMsg').textContent = 'Baixado ✓';
+});
+
+document.getElementById('btnReset').addEventListener('click', ()=>{
+  state.refFiles = [];
+  state.tgtFiles = [];
+  renderList(listRefEl, [], 'ref'); renderList(listTgtEl, [], 'tgt');
+  mapRefWrap.classList.add('hidden');
+  mapTgtWrap.classList.add('hidden');
+  document.getElementById('results').classList.add('hidden');
+  fileRefInput.value=''; fileTgtInput.value='';
+  checkReady();
+});
+</script>
+</body>
+</html>
