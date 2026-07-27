@@ -136,16 +136,16 @@
 <body>
 <div class="wrap">
   <header>
-    <div class="eyebrow">Ferramenta de conferência · reutilizável</div>
+    <div class="eyebrow">Ferramenta de conferência · Preserva Formatação Original</div>
     <h1>Cross-check Referência BSAO × Referência MAS</h1>
-    <p>Passo 1: a base de referência monta o mapa BSAO → MAS. Passo 2: os arquivos que precisam do MAS preenchido/conferido recebem o MAS cruzado a partir do BSAO. Linhas sem correspondência ficam destacadas.</p>
+    <p>Preenche as colunas diretamente no arquivo sem alterar fontes, formatos numéricos, de data ou largura de colunas.</p>
   </header>
 
   <div class="grid">
     <!-- STEP 1 -->
     <div class="card">
       <h2><span class="step-num">1</span> Base de referência (BSAO → MAS)</h2>
-      <p class="sub">Arquivo com os campos de BSAO (ex.: <strong>Ref. DSV</strong> e <strong>Contra File</strong>) e o MAS (ex.: <strong>Ref. Minebea</strong>) já pareados na mesma linha.</p>
+      <p class="sub">Arquivo com os campos de BSAO e MAS pareados.</p>
       <label class="drop" id="dropRef">
         <input type="file" id="fileRef" multiple accept=".xlsx,.xls,.csv">
         Clique ou arraste o(s) arquivo(s) aqui
@@ -156,17 +156,14 @@
         <div class="field">
           <label>Coluna BSAO — principal</label>
           <select id="selRefBsaoPrimary"></select>
-          <div class="hint">Ex.: "Ref. DSV"</div>
         </div>
         <div class="field">
           <label>Coluna BSAO — alternativa</label>
           <select id="selRefBsaoAlt"></select>
-          <div class="hint">Usada só se não achar na principal. Ex.: "Contra File"</div>
         </div>
         <div class="field" style="grid-column:1 / -1">
           <label>Coluna MAS</label>
           <select id="selRefMas"></select>
-          <div class="hint">Ex.: "Ref. Minebea"</div>
         </div>
       </div>
     </div>
@@ -174,7 +171,7 @@
     <!-- STEP 2 -->
     <div class="card">
       <h2><span class="step-num">2</span> Base a completar/conferir (AGING)</h2>
-      <p class="sub">Arquivo(s) onde o BSAO aparece dentro de um texto (ex.: "Text" ou "Reference Key 3") e o MAS pode estar vazio ou precisa ser conferido.</p>
+      <p class="sub">Arquivo(s) onde o MAS precisa ser preenchido/conferido.</p>
       <label class="drop" id="dropTgt">
         <input type="file" id="fileTgt" multiple accept=".xlsx,.xls,.csv">
         Clique ou arraste o(s) arquivo(s) aqui
@@ -185,17 +182,14 @@
         <div class="field">
           <label>Coluna BSAO — principal</label>
           <select id="selTgtBsaoPrimary"></select>
-          <div class="hint">Ex.: "Text"</div>
         </div>
         <div class="field">
           <label>Coluna BSAO — alternativa</label>
           <select id="selTgtBsaoAlt"></select>
-          <div class="hint">Ex.: "Reference Key 3"</div>
         </div>
         <div class="field" style="grid-column:1 / -1">
-          <label>Coluna MAS já existente (opcional, p/ conferir divergência)</label>
+          <label>Coluna MAS para preencher / conferir</label>
           <select id="selTgtMas"></select>
-          <div class="hint">Ex.: "Ref Cliente". Deixe em "nenhuma" se não houver.</div>
         </div>
       </div>
     </div>
@@ -209,57 +203,31 @@
     <div class="summary" id="summary"></div>
     <div class="legend">
       <span><span class="dot" style="background:var(--ok)"></span> OK — MAS encontrado</span>
-      <span><span class="dot" style="background:var(--div)"></span> Divergente — MAS existente ≠ MAS encontrado</span>
-      <span><span class="dot" style="background:var(--warn)"></span> BSAO achado, sem correspondência na base de referência</span>
-      <span><span class="dot" style="background:var(--bad)"></span> BSAO não localizado na linha</span>
+      <span><span class="dot" style="background:var(--div)"></span> Divergente</span>
+      <span><span class="dot" style="background:var(--warn)"></span> BSAO sem correspondência</span>
+      <span><span class="dot" style="background:var(--bad)"></span> BSAO não localizado</span>
     </div>
 
     <div class="result-actions">
-      <button class="primary" id="btnDownload">Baixar Planilha Atualizada (.xlsx)</button>
-      <button class="ghost" id="btnDownloadReport">Baixar Relatório de Conferência</button>
-      <button class="ghost" id="btnReset">Recomeçar / novos arquivos</button>
+      <button class="primary" id="btnDownload">Baixar Planilha Original Atualizada (.xlsx)</button>
+      <button class="ghost" id="btnReset">Recomeçar</button>
       <span class="msg" id="downloadMsg"></span>
     </div>
 
-    <div class="section-title">Prévia (linhas problemáticas no topo)</div>
+    <div class="section-title">Prévia das alterações</div>
     <div class="table-wrap"><table id="previewTable"><thead></thead><tbody></tbody></table></div>
-  </div>
-
-  <div class="footer-note">
-    Como funciona: A aplicação atualiza as células do próprio arquivo Excel mantendo toda a formatação original (cores, fontes, bordas e largura de colunas).
   </div>
 </div>
 
 <script>
-const state = {
-  refFiles: [],
-  tgtFiles: [],
-};
+const state = { refFiles: [], tgtFiles: [] };
 
-function detectHeaderRow(matrix){
-  const limit = Math.min(matrix.length, 15);
-  for(let i=0;i<limit;i++){
-    const row = matrix[i]||[];
-    const nonEmpty = row.filter(c=>c!==null && c!==undefined && String(c).trim()!=='').length;
-    if(nonEmpty>=4) return i;
-  }
-  return 0;
-}
-
-function sheetToRows(ws, headerRowIdx){
-  const matrix = XLSX.utils.sheet_to_json(ws, {header:1, defval:'', raw:false});
-  const rawHeaders = (matrix[headerRowIdx]||[]).map(h=>String(h).trim());
-  const headerColMap = {};
-  rawHeaders.forEach((h,idx)=>{ if(h && !(h in headerColMap)) headerColMap[h]=idx; });
-  const rows = [];
-  for(let i=headerRowIdx+1;i<matrix.length;i++){
-    const r = matrix[i];
-    if(!r || r.every(c=>c===''||c===null||c===undefined)) continue;
-    const obj = {};
-    rawHeaders.forEach((h,idx)=>{ if(h) obj[h]=r[idx]!==undefined?r[idx]:''; });
-    rows.push(obj);
-  }
-  return {headers: rawHeaders.filter(h=>h), rows, headerRowIdx, headerColMap, matrix};
+function extractBSAO(val){
+  if(val===null||val===undefined) return null;
+  const s = String(val);
+  const m = s.match(/BSAO\s*0*\d+/i);
+  if(!m) return null;
+  return m[0].replace(/\s+/g,'').toUpperCase();
 }
 
 function readWorkbookMeta(file){
@@ -267,9 +235,9 @@ function readWorkbookMeta(file){
     const reader = new FileReader();
     reader.onload = e => {
       try{
-        // cellStyles: true e cellNF: true preservam estilos e formatação numérica
-        const wb = XLSX.read(e.target.result, {type:'array', cellDates:true, cellStyles:true, cellNF:true});
-        resolve({wb, name:file.name});
+        // IMPORTANTE: raw: true e cellStyles: true garantem que a estrutura interna permanece intacta
+        const wb = XLSX.read(e.target.result, {type:'array', cellStyles:true, cellNF:true, cellDates:false});
+        resolve({wb, name:file.name, rawBuffer: e.target.result});
       }catch(err){reject(err);}
     };
     reader.onerror = reject;
@@ -277,22 +245,32 @@ function readWorkbookMeta(file){
   });
 }
 
-function buildFromSheet(wb, sheetName){
-  const ws = wb.Sheets[sheetName];
-  const matrix = XLSX.utils.sheet_to_json(ws, {header:1, defval:'', raw:false});
-  const headerRowIdx = detectHeaderRow(matrix);
-  return sheetToRows(ws, headerRowIdx);
+function detectHeaderRow(ws){
+  const range = XLSX.utils.decode_range(ws['!ref']||'A1:A1');
+  for(let r=range.s.r; r<=Math.min(range.e.r, 15); r++){
+    let count = 0;
+    for(let c=range.s.c; c<=range.e.c; c++){
+      const cell = ws[XLSX.utils.encode_cell({r,c})];
+      if(cell && cell.v!==undefined && String(cell.v).trim()!=='') count++;
+    }
+    if(count >= 4) return r;
+  }
+  return 0;
 }
 
-function pickDefaultSheet(wb){
-  let best = wb.SheetNames[0], bestScore=-1;
-  wb.SheetNames.forEach(name=>{
-    const ws = wb.Sheets[name];
-    const range = XLSX.utils.decode_range(ws['!ref']||'A1:A1');
-    const score = (range.e.r+1)*(range.e.c+1);
-    if(score>bestScore){bestScore=score; best=name;}
-  });
-  return best;
+function getHeaders(ws, headerRowIdx){
+  const range = XLSX.utils.decode_range(ws['!ref']||'A1:A1');
+  const headers = {};
+  const list = [];
+  for(let c=range.s.c; c<=range.e.c; c++){
+    const cell = ws[XLSX.utils.encode_cell({r:headerRowIdx, c})];
+    const val = cell && cell.v!==undefined ? String(cell.v).trim() : '';
+    if(val){
+      headers[val] = c;
+      list.push(val);
+    }
+  }
+  return {headers, list};
 }
 
 function guessHeader(headers, patterns){
@@ -313,20 +291,7 @@ function fillSelect(sel, headers, selected){
     headers.map(h=>`<option value="${h}" ${h===selected?'selected':''}>${h}</option>`).join('');
 }
 
-function extractBSAO(val){
-  if(val===null||val===undefined) return null;
-  const s = String(val);
-  const m = s.match(/BSAO\s*0*\d+/i);
-  if(!m) return null;
-  return m[0].replace(/\s+/g,'').toUpperCase();
-}
-
-function cellVal(row, col){
-  if(!col) return '';
-  return row[col];
-}
-
-// ---------- DOM refs ----------
+// DOM Refs
 const dropRef = document.getElementById('dropRef');
 const fileRefInput = document.getElementById('fileRef');
 const listRefEl = document.getElementById('listRef');
@@ -345,15 +310,28 @@ const selTgtMas = document.getElementById('selTgtMas');
 
 const btnProcess = document.getElementById('btnProcess');
 
-function sheetOptionsHtml(sheetNames, selected){
-  return sheetNames.map(s=>`<option value="${s}" ${s===selected?'selected':''}>${s}</option>`).join('');
+async function handleFiles(files, group){
+  for(const file of files){
+    try{
+      const meta = await readWorkbookMeta(file);
+      const sheetName = meta.wb.SheetNames[0];
+      const ws = meta.wb.Sheets[sheetName];
+      const headerRowIdx = detectHeaderRow(ws);
+      const {headers, list} = getHeaders(ws, headerRowIdx);
+
+      const entry = { name: file.name, wb: meta.wb, sheetName, headerRowIdx, headers, headerList: list };
+      if(group==='ref') state.refFiles.push(entry); else state.tgtFiles.push(entry);
+    }catch(err){ alert('Erro ao ler '+file.name+': '+err.message); }
+  }
+  if(group==='ref'){ renderList(listRefEl, state.refFiles, 'ref'); refreshRefMap(); }
+  else { renderList(listTgtEl, state.tgtFiles, 'tgt'); refreshTgtMap(); }
+  checkReady();
 }
 
 function renderList(container, files, group){
   container.innerHTML = files.map((f,i)=>`
     <div class="f">
-      <span class="n">${f.name} (${f.rows.length}L)</span>
-      ${f.sheetNames.length>1 ? `<select class="sheetSel" data-i="${i}" data-group="${group}">${sheetOptionsHtml(f.sheetNames,f.sheetName)}</select>` : ''}
+      <span class="n">${f.name}</span>
       <button data-i="${i}" data-group="${group}" class="rmBtn">remover</button>
     </div>
   `).join('');
@@ -366,271 +344,174 @@ function renderList(container, files, group){
       checkReady();
     };
   });
-  container.querySelectorAll('.sheetSel').forEach(sel=>{
-    sel.onchange = async ()=>{
-      const arr = group==='ref'?state.refFiles:state.tgtFiles;
-      const f = arr[+sel.dataset.i];
-      const built = buildFromSheet(f.wb, sel.value);
-      f.sheetName = sel.value; f.headers = built.headers; f.rows = built.rows;
-      f.headerRowIdx = built.headerRowIdx; f.headerColMap = built.headerColMap;
-      renderList(container, arr, group);
-      if(group==='ref') refreshRefMap(); else refreshTgtMap();
-    };
-  });
 }
 
 function refreshRefMap(){
   if(!state.refFiles.length){ mapRefWrap.classList.add('hidden'); return; }
   mapRefWrap.classList.remove('hidden');
-  const headers = state.refFiles[0].headers;
+  const headers = state.refFiles[0].headerList;
   fillSelect(selRefBsaoPrimary, headers, guessHeader(headers, ['ref. dsv','ref dsv','dsv','ref']));
   fillSelect(selRefBsaoAlt, headers, guessHeader(headers, ['contra file','contra-file','contrafile','contra']));
-  fillSelect(selRefMas, headers, guessHeader(headers, ['ref. minebea','ref minebea','minebea','ref cliente','referência mas','mas']));
+  fillSelect(selRefMas, headers, guessHeader(headers, ['ref. minebea','ref minebea','minebea','ref cliente','mas']));
 }
 
 function refreshTgtMap(){
   if(!state.tgtFiles.length){ mapTgtWrap.classList.add('hidden'); return; }
   mapTgtWrap.classList.remove('hidden');
-  const headers = state.tgtFiles[0].headers;
+  const headers = state.tgtFiles[0].headerList;
   fillSelect(selTgtBsaoPrimary, headers, guessHeader(headers, ['text']));
-  fillSelect(selTgtBsaoAlt, headers, guessHeader(headers, ['reference key 3','ref key 3','reference key']));
+  fillSelect(selTgtBsaoAlt, headers, guessHeader(headers, ['reference key 3','ref key 3']));
   fillSelect(selTgtMas, headers, guessHeader(headers, ['ref cliente','ref. minebea','minebea','mas']));
-}
-
-async function handleFiles(files, group){
-  for(const file of files){
-    try{
-      const {wb, name} = await readWorkbookMeta(file);
-      const sheetName = pickDefaultSheet(wb);
-      const built = buildFromSheet(wb, sheetName);
-      const entry = {name, wb, sheetNames: wb.SheetNames, sheetName, headers: built.headers, rows: built.rows,
-        headerRowIdx: built.headerRowIdx, headerColMap: built.headerColMap};
-      if(group==='ref') state.refFiles.push(entry); else state.tgtFiles.push(entry);
-    }catch(err){ alert('Erro ao ler '+file.name+': '+err.message); }
-  }
-  if(group==='ref'){ renderList(listRefEl, state.refFiles, 'ref'); refreshRefMap(); }
-  else { renderList(listTgtEl, state.tgtFiles, 'tgt'); refreshTgtMap(); }
-  checkReady();
 }
 
 dropRef.addEventListener('click', ()=>fileRefInput.click());
 fileRefInput.addEventListener('change', e=>handleFiles([...e.target.files],'ref'));
-dropRef.addEventListener('dragover', e=>{e.preventDefault(); dropRef.classList.add('drag');});
-dropRef.addEventListener('dragleave', ()=>dropRef.classList.remove('drag'));
-dropRef.addEventListener('drop', e=>{ e.preventDefault(); dropRef.classList.remove('drag'); handleFiles([...e.dataTransfer.files],'ref'); });
-
 dropTgt.addEventListener('click', ()=>fileTgtInput.click());
 fileTgtInput.addEventListener('change', e=>handleFiles([...e.target.files],'tgt'));
-dropTgt.addEventListener('dragover', e=>{e.preventDefault(); dropTgt.classList.add('drag');});
-dropTgt.addEventListener('dragleave', ()=>dropTgt.classList.remove('drag'));
-dropTgt.addEventListener('drop', e=>{ e.preventDefault(); dropTgt.classList.remove('drag'); handleFiles([...e.dataTransfer.files],'tgt'); });
 
-function checkReady(){
-  btnProcess.disabled = !(state.refFiles.length && state.tgtFiles.length);
-}
+function checkReady(){ btnProcess.disabled = !(state.refFiles.length && state.tgtFiles.length); }
 
-// ---------- Processing ----------
+let modifiedFiles = [];
 let lastOutput = [];
-let modifiedTargetFiles = [];
-
-function ensureCol(ws, range, headerRowIdx, headerName){
-  for(let c=range.s.c; c<=range.e.c; c++){
-    const addr = XLSX.utils.encode_cell({r:headerRowIdx, c});
-    const cell = ws[addr];
-    if(cell && String(cell.v).trim()===headerName) return c;
-  }
-  const newCol = range.e.c+1;
-  const addr = XLSX.utils.encode_cell({r:headerRowIdx, c:newCol});
-  ws[addr] = {t:'s', v:headerName};
-  range.e.c = newCol;
-  return newCol;
-}
-
-function writeBackTargetFile(f, tgtBsaoPrimary, tgtBsaoAlt, tgtMasCol, bsaoMap){
-  const ws = f.wb.Sheets[f.sheetName];
-  const range = XLSX.utils.decode_range(ws['!ref']);
-  const headerRowIdx = f.headerRowIdx;
-  const colMap = f.headerColMap;
-
-  const bsaoColIdx = ensureCol(ws, range, headerRowIdx, 'BSAO identificado');
-  const statusColIdx = ensureCol(ws, range, headerRowIdx, 'Status BSAO x MAS');
-  const masColIdx = tgtMasCol ? colMap[tgtMasCol] : ensureCol(ws, range, headerRowIdx, 'MAS (preenchido automaticamente)');
-
-  let okCount=0, filledCount=0, noBsaoCount=0, noMasCount=0, divCount=0;
-  const preview = [];
-
-  for(let r=headerRowIdx+1; r<=range.e.r; r++){
-    let hasContent=false;
-    for(let c=range.s.c;c<=range.e.c;c++){
-      const cell = ws[XLSX.utils.encode_cell({r,c})];
-      if(cell && cell.v!==undefined && cell.v!==null && String(cell.v).trim()!==''){ hasContent=true; break; }
-    }
-    if(!hasContent) continue;
-
-    const primaryColIdx = colMap[tgtBsaoPrimary];
-    const altColIdx = tgtBsaoAlt ? colMap[tgtBsaoAlt] : undefined;
-    const primaryVal = primaryColIdx!==undefined ? ws[XLSX.utils.encode_cell({r,c:primaryColIdx})]?.v : '';
-    let bsao = extractBSAO(primaryVal);
-    let via = 'principal';
-    if(!bsao && altColIdx!==undefined){
-      const altVal = ws[XLSX.utils.encode_cell({r,c:altColIdx})]?.v;
-      bsao = extractBSAO(altVal);
-      via = 'alternativa';
-    }
-
-    const existingMasCell = ws[XLSX.utils.encode_cell({r,c:masColIdx})];
-    const existingMas = existingMasCell && existingMasCell.v!==undefined ? String(existingMasCell.v).trim() : '';
-
-    let status, statusClass, foundMas='';
-
-    if(!bsao){
-      status = '🔴 BSAO não localizado na linha';
-      statusClass = 'bad';
-      via='';
-      noBsaoCount++;
-    } else if(bsaoMap[bsao]){
-      foundMas = bsaoMap[bsao].mas;
-      if(existingMas && existingMas!==foundMas){
-        status = `🟣 Divergente (existente: ${existingMas} / encontrado: ${foundMas})`;
-        statusClass = 'divergent';
-        divCount++;
-      } else if(existingMas){
-        status = '🟢 OK (já preenchido, confere)';
-        statusClass = 'ok';
-        okCount++;
-      } else {
-        // Altera diretamente o valor da célula mantendo seu formato original
-        ws[XLSX.utils.encode_cell({r,c:masColIdx})] = {t:'s', v: foundMas};
-        status = '🟢 Preenchido automaticamente';
-        statusClass = 'ok';
-        filledCount++;
-      }
-    } else {
-      status = '🟡 BSAO sem correspondência na base de referência';
-      statusClass = 'warn';
-      noMasCount++;
-    }
-
-    ws[XLSX.utils.encode_cell({r,c:bsaoColIdx})] = {t:'s', v: bsao||''};
-    ws[XLSX.utils.encode_cell({r,c:statusColIdx})] = {t:'s', v: status};
-
-    const snap = {'Arquivo de origem': f.name};
-    Object.keys(colMap).forEach(h=>{
-      const cell = ws[XLSX.utils.encode_cell({r,c:colMap[h]})];
-      snap[h] = cell ? cell.v : '';
-    });
-    snap['BSAO identificado'] = bsao||'';
-    snap['MAS (após cruzamento)'] = existingMas || foundMas || '';
-    snap['Status'] = status;
-    preview.push({...snap, __statusClass: statusClass, __arquivoOrigem: f.name});
-  }
-
-  ws['!ref'] = XLSX.utils.encode_range(range);
-  return {stats:{okCount, filledCount, noBsaoCount, noMasCount, divCount}, preview};
-}
 
 btnProcess.addEventListener('click', ()=>{
   const refBsaoPrimary = selRefBsaoPrimary.value;
   const refBsaoAlt = selRefBsaoAlt.value;
   const refMasCol = selRefMas.value;
+
   const tgtBsaoPrimary = selTgtBsaoPrimary.value;
   const tgtBsaoAlt = selTgtBsaoAlt.value;
   const tgtMasCol = selTgtMas.value;
 
+  // 1. Mapeamento BSAO -> MAS
   const bsaoMap = {};
   state.refFiles.forEach(f=>{
-    f.rows.forEach(row=>{
-      let bsao = extractBSAO(cellVal(row,refBsaoPrimary));
-      let via = 'principal';
-      if(!bsao && refBsaoAlt){ bsao = extractBSAO(cellVal(row,refBsaoAlt)); via='alternativa'; }
-      if(bsao){
-        const mas = cellVal(row,refMasCol);
-        if(mas!==undefined && mas!==null && String(mas).trim()!==''){
-          if(!bsaoMap[bsao]) bsaoMap[bsao] = { mas: String(mas).trim(), file:f.name, via };
+    const ws = f.wb.Sheets[f.sheetName];
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    const cPrimary = f.headers[refBsaoPrimary];
+    const cAlt = f.headers[refBsaoAlt];
+    const cMas = f.headers[refMasCol];
+
+    for(let r=f.headerRowIdx+1; r<=range.e.r; r++){
+      const valP = cPrimary!==undefined ? ws[XLSX.utils.encode_cell({r,c:cPrimary})]?.v : '';
+      let bsao = extractBSAO(valP);
+      if(!bsao && cAlt!==undefined){
+        const valA = ws[XLSX.utils.encode_cell({r,c:cAlt})]?.v;
+        bsao = extractBSAO(valA);
+      }
+      if(bsao && cMas!==undefined){
+        const masVal = ws[XLSX.utils.encode_cell({r,c:cMas})]?.v;
+        if(masVal!==undefined && masVal!==null && String(masVal).trim()!==''){
+          if(!bsaoMap[bsao]) bsaoMap[bsao] = String(masVal).trim();
         }
       }
-    });
+    }
   });
 
+  // 2. Preenchimento in-place mantendo formatos originais
   let totals = {okCount:0, filledCount:0, noBsaoCount:0, noMasCount:0, divCount:0};
-  let output = [];
-  modifiedTargetFiles = [];
+  modifiedFiles = [];
+  lastOutput = [];
 
   state.tgtFiles.forEach(f=>{
-    const {stats, preview} = writeBackTargetFile(f, tgtBsaoPrimary, tgtBsaoAlt, tgtMasCol, bsaoMap);
-    totals.okCount += stats.okCount;
-    totals.filledCount += stats.filledCount;
-    totals.noBsaoCount += stats.noBsaoCount;
-    totals.noMasCount += stats.noMasCount;
-    totals.divCount += stats.divCount;
-    output = output.concat(preview);
-    modifiedTargetFiles.push({name: f.name, wb: f.wb});
+    const ws = f.wb.Sheets[f.sheetName];
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    const cPrimary = f.headers[tgtBsaoPrimary];
+    const cAlt = f.headers[tgtBsaoAlt];
+    const cMas = f.headers[tgtMasCol];
+
+    for(let r=f.headerRowIdx+1; r<=range.e.r; r++){
+      const valP = cPrimary!==undefined ? ws[XLSX.utils.encode_cell({r,c:cPrimary})]?.v : '';
+      let bsao = extractBSAO(valP);
+      if(!bsao && cAlt!==undefined){
+        const valA = ws[XLSX.utils.encode_cell({r,c:cAlt})]?.v;
+        bsao = extractBSAO(valA);
+      }
+
+      const masCellAddr = XLSX.utils.encode_cell({r, c: cMas});
+      const existingMas = ws[masCellAddr] && ws[masCellAddr].v!==undefined ? String(ws[masCellAddr].v).trim() : '';
+
+      let status = '', statusClass = '';
+
+      if(!bsao){
+        status = 'BSAO não localizado';
+        statusClass = 'bad';
+        totals.noBsaoCount++;
+      } else if(bsaoMap[bsao]){
+        const foundMas = bsaoMap[bsao];
+        if(existingMas && existingMas !== foundMas){
+          status = `Divergente (Existente: ${existingMas} / Encontrado: ${foundMas})`;
+          statusClass = 'divergent';
+          totals.divCount++;
+        } else if(existingMas){
+          status = 'Já preenchido (OK)';
+          statusClass = 'ok';
+          totals.okCount++;
+        } else {
+          // MODIFICAÇÃO IN-PLACE APENAS DO VALOR (Preserva formatação inteira da planilha)
+          if(!ws[masCellAddr]) ws[masCellAddr] = { t: 's', v: '' };
+          ws[masCellAddr].v = foundMas;
+          ws[masCellAddr].w = undefined; // Força re-renderização visual limpa no Excel
+
+          status = 'Preenchido automaticamente';
+          statusClass = 'ok';
+          totals.filledCount++;
+        }
+      } else {
+        status = 'BSAO sem correspondência';
+        statusClass = 'warn';
+        totals.noMasCount++;
+      }
+
+      lastOutput.push({
+        'Linha': r + 1,
+        'BSAO': bsao || 'N/A',
+        'MAS': existingMas || bsaoMap[bsao] || '',
+        'Status': status,
+        __statusClass: statusClass
+      });
+    }
+
+    modifiedFiles.push({ name: f.name, wb: f.wb });
   });
 
-  lastOutput = output;
-  totals.total = output.length;
-  renderResults(output, totals);
+  totals.total = lastOutput.length;
+  renderResults(lastOutput, totals);
 });
 
 function renderResults(output, stats){
   document.getElementById('results').classList.remove('hidden');
   document.getElementById('summary').innerHTML = `
     <div class="stat"><div class="num">${stats.total}</div><div class="lbl">Total de linhas</div></div>
-    <div class="stat ok"><div class="num">${stats.filledCount}</div><div class="lbl">MAS preenchido agora</div></div>
-    <div class="stat ok"><div class="num">${stats.okCount}</div><div class="lbl">Já estava OK</div></div>
-    <div class="stat div"><div class="num">${stats.divCount}</div><div class="lbl">Divergente</div></div>
-    <div class="stat bad"><div class="num">${stats.noMasCount + stats.noBsaoCount}</div><div class="lbl">Não encontrado</div></div>
+    <div class="stat ok"><div class="num">${stats.filledCount}</div><div class="lbl">Preenchidos agora</div></div>
+    <div class="stat ok"><div class="num">${stats.okCount}</div><div class="lbl">Já estavam OK</div></div>
+    <div class="stat div"><div class="num">${stats.divCount}</div><div class="lbl">Divergentes</div></div>
+    <div class="stat bad"><div class="num">${stats.noMasCount + stats.noBsaoCount}</div><div class="lbl">Não encontrados</div></div>
   `;
 
-  if(!output.length) return;
-  const cols = Object.keys(output[0]).filter(k=>!k.startsWith('__'));
-  const thead = document.querySelector('#previewTable thead');
   const tbody = document.querySelector('#previewTable tbody');
-  thead.innerHTML = '<tr>'+cols.map(c=>`<th>${c}</th>`).join('')+'</tr>';
-
-  const order = {bad:0, warn:1, divergent:2, ok:3};
-  const sorted = [...output].sort((a,b)=>order[a.__statusClass]-order[b.__statusClass]);
-
-  tbody.innerHTML = sorted.map(r=>{
-    return `<tr class="${r.__statusClass}">` +
-      cols.map(c=>{
-        const v = r[c];
-        return `<td>${v!==undefined&&v!==null?String(v).slice(0,60):''}</td>`;
-      }).join('') +
-      '</tr>';
-  }).join('');
+  const thead = document.querySelector('#previewTable thead');
+  thead.innerHTML = '<tr><th>Linha</th><th>BSAO</th><th>MAS</th><th>Status</th></tr>';
+  
+  tbody.innerHTML = output.slice(0, 50).map(r=>`
+    <tr class="${r.__statusClass}">
+      <td>${r.Linha}</td>
+      <td>${r.BSAO}</td>
+      <td>${r.MAS}</td>
+      <td>${r.Status}</td>
+    </tr>
+  `).join('');
 }
 
-// Baixa o arquivo original preservando 100% da formatação e estilos
 document.getElementById('btnDownload').addEventListener('click', ()=>{
-  if(!modifiedTargetFiles.length) return;
-  modifiedTargetFiles.forEach(f => {
+  if(!modifiedFiles.length) return;
+  modifiedFiles.forEach(f => {
     XLSX.writeFile(f.wb, `Atualizado_${f.name}`);
   });
-  document.getElementById('downloadMsg').textContent = 'Planilha atualizada baixada ✓';
+  document.getElementById('downloadMsg').textContent = 'Baixado com sucesso ✓';
 });
 
-// Gera relatório consolidado
-document.getElementById('btnDownloadReport').addEventListener('click', ()=>{
-  if(!lastOutput.length) return;
-  const rows = lastOutput.map(({__statusClass, ...rest})=>rest);
-  const ws = XLSX.utils.json_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Relatorio_CrossCheck');
-  const ts = new Date().toISOString().slice(0,10);
-  XLSX.writeFile(wb, `Relatorio_CrossCheck_${ts}.xlsx`);
-});
-
-document.getElementById('btnReset').addEventListener('click', ()=>{
-  state.refFiles = [];
-  state.tgtFiles = [];
-  renderList(listRefEl, [], 'ref'); renderList(listTgtEl, [], 'tgt');
-  mapRefWrap.classList.add('hidden');
-  mapTgtWrap.classList.add('hidden');
-  document.getElementById('results').classList.add('hidden');
-  fileRefInput.value=''; fileTgtInput.value='';
-  checkReady();
-});
+document.getElementById('btnReset').addEventListener('click', ()=>location.reload());
 </script>
 </body>
 </html>
