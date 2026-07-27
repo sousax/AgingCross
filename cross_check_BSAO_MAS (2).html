@@ -362,10 +362,18 @@ function refreshTgtMap(){
   fillSelect(selTgtMas, headers, guessHeader(headers, ['ref cliente','ref. minebea','minebea','mas']));
 }
 
+// Eventos de Clique e Arrastar (Drag & Drop)
 dropRef.addEventListener('click', ()=>fileRefInput.click());
 fileRefInput.addEventListener('change', e=>handleFiles([...e.target.files],'ref'));
+dropRef.addEventListener('dragover', e=>{e.preventDefault(); dropRef.classList.add('drag');});
+dropRef.addEventListener('dragleave', ()=>dropRef.classList.remove('drag'));
+dropRef.addEventListener('drop', e=>{ e.preventDefault(); dropRef.classList.remove('drag'); handleFiles([...e.dataTransfer.files],'ref'); });
+
 dropTgt.addEventListener('click', ()=>fileTgtInput.click());
 fileTgtInput.addEventListener('change', e=>handleFiles([...e.target.files],'tgt'));
+dropTgt.addEventListener('dragover', e=>{e.preventDefault(); dropTgt.classList.add('drag');});
+dropTgt.addEventListener('dragleave', ()=>dropTgt.classList.remove('drag'));
+dropTgt.addEventListener('drop', e=>{ e.preventDefault(); dropTgt.classList.remove('drag'); handleFiles([...e.dataTransfer.files],'tgt'); });
 
 function checkReady(){ btnProcess.disabled = !(state.refFiles.length && state.tgtFiles.length); }
 
@@ -394,7 +402,6 @@ btnProcess.addEventListener('click', ()=>{
       const valP = cPrimary!==undefined ? ws[XLSX.utils.encode_cell({r,c:cPrimary})]?.v : '';
       let bsao = extractBSAO(valP);
 
-      // Se não achou BSAO na coluna principal, tenta na alternativa
       if(!bsao && cAlt!==undefined && cAlt!==''){
         const valA = ws[XLSX.utils.encode_cell({r,c:cAlt})]?.v;
         bsao = extractBSAO(valA);
@@ -425,7 +432,6 @@ btnProcess.addEventListener('click', ()=>{
       const valP = cPrimary!==undefined ? ws[XLSX.utils.encode_cell({r,c:cPrimary})]?.v : '';
       let bsao = extractBSAO(valP);
 
-      // Se não achou BSAO na coluna principal, tenta na alternativa
       if(!bsao && cAlt!==undefined && cAlt!==''){
         const valA = ws[XLSX.utils.encode_cell({r,c:cAlt})]?.v;
         bsao = extractBSAO(valA);
@@ -451,7 +457,6 @@ btnProcess.addEventListener('click', ()=>{
           statusClass = 'ok';
           totals.okCount++;
         } else {
-          // Preenche a célula alterando apenas o valor e mantendo formatação
           if(!ws[masCellAddr]) ws[masCellAddr] = { t: 's', v: '' };
           ws[masCellAddr].v = foundMas;
           ws[masCellAddr].w = undefined;
