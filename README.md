@@ -2,7 +2,7 @@
 
 Ferramenta web de página única para cruzar planilhas: preenche e confere a coluna **MAS** de uma planilha de AGING a partir de uma base de referência indexada por **BSAO / House ID**. Tudo roda no navegador, nenhum arquivo é enviado para servidor.
 
-Online: https://sousax.github.io/AgingCross/index..html
+Online: https://sousax.github.io/AgingCross/
 
 ## Funcionalidades
 
@@ -23,4 +23,4 @@ Só a primeira aba de cada arquivo é lida.
 
 ## Como rodar
 
-Abra `index..html` no navegador (precisa de internet para carregar o SheetJS do CDN).
+Abra `index.html` no navegador (precisa de internet para carregar o SheetJS do CDN).
